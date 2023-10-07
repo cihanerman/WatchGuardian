@@ -82,9 +82,9 @@ func main() {
 					return
 				}
 				if event.Has(fsnotify.Write) {
-					log.Println("modified file:", event.Name)
 					line, err := fileReader.ReadString('\n')
 					utils.CheckError(err)
+					line = utils.TrimInput(line)
 					go utils.SendUpdate(line, event.Name, event.Op.String(), postUrl, headerVariable, token)
 				} else if event.Has(fsnotify.Remove) {
 					return

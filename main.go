@@ -3,10 +3,10 @@ package main
 import (
 	"bufio"
 	"github.com/cihanerman/WatchGuardian/utils"
+	"github.com/fsnotify/fsnotify"
 	"log"
 	"net/url"
 	"os"
-	"strings"
 )
 
 func main() {
@@ -18,7 +18,7 @@ func main() {
 
 	filePath, err := reader.ReadString('\n')
 	utils.CheckError(err)
-	filePath = strings.TrimSuffix(filePath, "\n")
+	filePath = utils.TrimInput(filePath)
 
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		log.Fatal("File does not exist")
@@ -28,7 +28,7 @@ func main() {
 	log.Println("Enter post url: ")
 	postUrl, err := reader.ReadString('\n')
 	utils.CheckError(err)
-	postUrl = strings.TrimSuffix(postUrl, "\n")
+	postUrl = utils.TrimInput(postUrl)
 
 	// parse url
 	parsedURL, err := url.Parse(postUrl)
@@ -43,25 +43,68 @@ func main() {
 	log.Println("Enter token: ")
 	token, err := reader.ReadString('\n')
 	utils.CheckError(err)
-	token = strings.TrimSuffix(token, "\n")
-	token = strings.Trim(token, " ")
-
-	if token == "" {
-		log.Fatal("Token is empty")
-	}
+	token = utils.TrimInput(token)
 
 	// read header variable from command line
-	log.Println("Enter header variable(defaul Authorization): ")
+	log.Println("Enter header variable(default Authorization): ")
 	headerVariable, err := reader.ReadString('\n')
 	utils.CheckError(err)
-	headerVariable = strings.TrimSuffix(headerVariable, "\n")
-	headerVariable = strings.Trim(headerVariable, " ")
+	headerVariable = utils.TrimInput(headerVariable)
 
 	if headerVariable == "" {
 		headerVariable = "Authorization"
 	}
 
-	// TODO watch the file for changes
+	// watch the file for changes
+	// open file
+	file, err := os.Open(filePath)
+	utils.CheckError(err)
+	defer file.Close()
 
-	// TODO send post request to url with data from file
+	fileReader := bufio.NewReader(file)
+	// Create new watcher.
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer watcher.Close()
+
+	closeWatcher := make(chan struct{})
+
+	// Start listening for events.
+	log.Println("File monitoring started...")
+	go func() {
+		defer close(closeWatcher)
+		for {
+			select {
+			case event, ok := <-watcher.Events:
+				if !ok {
+					return
+				}
+				if event.Has(fsnotify.Write) {
+					log.Println("modified file:", event.Name)
+					line, err := fileReader.ReadString('\n')
+					utils.CheckError(err)
+					go utils.SendUpdate(line, event.Name, event.Op.String(), postUrl, headerVariable, token)
+				} else if event.Has(fsnotify.Remove) {
+					return
+				}
+			case err, ok := <-watcher.Errors:
+				if !ok {
+					return
+				}
+				log.Println("error:", err)
+			}
+		}
+	}()
+
+	// Add a path.
+	err = watcher.Add(filePath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Block main goroutine until error.
+	<-closeWatcher
+
 }

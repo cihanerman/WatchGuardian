@@ -3,7 +3,7 @@ package main
 import (
 	"bufio"
 	"github.com/cihanerman/WatchGuardian/utils"
-	"github.com/fsnotify/fsnotify"
+	"github.com/cihanerman/WatchGuardian/watchers"
 	"log"
 	"net/url"
 	"os"
@@ -62,47 +62,19 @@ func main() {
 	defer file.Close()
 
 	fileReader := bufio.NewReader(file)
-	// Create new watcher.
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		log.Fatal(err)
-	}
+
+	// Create new watchers.
+	watcher := watchers.CreateWatcher()
 	defer watcher.Close()
 
 	closeWatcher := make(chan struct{})
 
 	// Start listening for events.
 	log.Println("File monitoring started...")
-	go func() {
-		defer close(closeWatcher)
-		for {
-			select {
-			case event, ok := <-watcher.Events:
-				if !ok {
-					return
-				}
-				if event.Has(fsnotify.Write) {
-					line, err := fileReader.ReadString('\n')
-					utils.CheckError(err)
-					line = utils.TrimInput(line)
-					go utils.SendUpdate(line, event.Name, event.Op.String(), postUrl, headerVariable, token)
-				} else if event.Has(fsnotify.Remove) {
-					return
-				}
-			case err, ok := <-watcher.Errors:
-				if !ok {
-					return
-				}
-				log.Println("error:", err)
-			}
-		}
-	}()
+	go watchers.StartWatcher(watcher, closeWatcher, fileReader, postUrl, headerVariable, token)
 
 	// Add a path.
-	err = watcher.Add(filePath)
-	if err != nil {
-		log.Fatal(err)
-	}
+	watchers.AddFileToWatcher(watcher, filePath)
 
 	// Block main goroutine until error.
 	<-closeWatcher

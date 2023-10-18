@@ -61,6 +61,13 @@ func main() {
 	utils.CheckError(err)
 	defer file.Close()
 
+	// get file info for seek
+	fileStat, err := file.Stat()
+	utils.CheckError(err)
+
+	// seek to end of file
+	_, err = file.Seek(fileStat.Size(), 0)
+
 	fileReader := bufio.NewReader(file)
 
 	// Create new watchers.

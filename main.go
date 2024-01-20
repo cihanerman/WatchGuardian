@@ -2,11 +2,12 @@ package main
 
 import (
 	"bufio"
-	"github.com/cihanerman/WatchGuardian/utils"
-	"github.com/cihanerman/WatchGuardian/watchers"
 	"log"
 	"net/url"
 	"os"
+
+	"github.com/cihanerman/WatchGuardian/utils"
+	"github.com/cihanerman/WatchGuardian/watchers"
 )
 
 func main() {
@@ -67,6 +68,7 @@ func main() {
 
 	// seek to end of file
 	_, err = file.Seek(fileStat.Size(), 0)
+	utils.CheckError(err)
 
 	fileReader := bufio.NewReader(file)
 
